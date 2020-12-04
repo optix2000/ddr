@@ -2,7 +2,6 @@
 #include <HID-Project.h>
 #include <HX711.h>
 
-
 // Gamepad button ID
 const byte BUTTON_UP = 1;
 const byte BUTTON_DOWN = 2;
@@ -21,7 +20,6 @@ const byte LC_RIGHT_SCK = A5;
 
 // Loadcell params
 const float LC_THRESHOLD = 1.10; // Multiplier above max seen value
-long LC_STEP_THRESHOLDS[] = {0, 0, 0, 0};
 
 // LCD            RS,E,d4,d5,d6,d7
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
@@ -38,9 +36,7 @@ class Pad {
   public:
     Pad(String text, byte button_id, byte lc_dout, byte lc_sck);
     String name();
-    byte buttonId();
     void calibrate();
-    void setInterrupt();
     void handle();
     HX711 lc();
 };
@@ -48,12 +44,11 @@ class Pad {
 Pad::Pad(String text, byte button_id, byte lc_dout, byte lc_sck) : text(text), button_id(button_id), lc_dout(lc_dout), lc_sck(lc_sck) {
   hx711.begin(lc_dout, lc_sck);
 }
+
 String Pad::name() {
   return text;
 }
-byte Pad::buttonId() {
-  return button_id;
-}
+
 void Pad::handle() {
   long reading = hx711.get_value();
   if (reading > step_threshold) {
@@ -65,6 +60,7 @@ void Pad::handle() {
   }
   Gamepad.write();
 }
+
 HX711 Pad::lc() {
   return hx711;
 }
@@ -158,9 +154,9 @@ void setup() {
 
   if (!selfTest()) die();
 
-  dPrint("Calibrating. Do not touch");
+  dPrint("Calibrating... Do not touch");
   calibrate();
-  dPrint("Configuring");
+  dPrint("Finalizing...");
 
   attachInterrupt(digitalPinToInterrupt(LC_UP_DOUT), handleUp, LOW);
   attachInterrupt(digitalPinToInterrupt(LC_DOWN_DOUT), handleDown, LOW);
@@ -173,7 +169,6 @@ void setup() {
 // the loop function runs over and over again forever
 void loop() {
   while(true) {
-    Gamepad.press(BUTTON_UP);
-    Gamepad.write();
+    // LCD menu stuff here.
   }
 }
