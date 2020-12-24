@@ -4,6 +4,8 @@
 
 // CONFIG
 
+#define DEBUG 0
+
 // Gamepad button ID
 const byte BUTTON_UP = 1;
 const byte BUTTON_DOWN = 2;
@@ -41,6 +43,7 @@ class Pad {
     bool is_pressed = false;
   public:
     Pad(String text, byte button_id, byte lc_dout, byte lc_sck);
+    void begin();
     String name();
     void calibrate();
     void handle();
@@ -51,6 +54,9 @@ class Pad {
 };
 
 Pad::Pad(String text, byte button_id, byte lc_dout, byte lc_sck) : text(text), button_id(button_id), lc_dout(lc_dout), lc_sck(lc_sck) {
+}
+
+void Pad::begin() {
   hx711.begin(lc_dout, lc_sck);
 }
 
@@ -88,7 +94,6 @@ void Pad::calibrate() {
 void Pad::press() {
     Gamepad.press(button_id);
     digitalWrite(LED_BUILTIN, HIGH);
-    Serial.print("Press");
     is_pressed = true;
     Gamepad.write();
 }
@@ -96,7 +101,6 @@ void Pad::press() {
 void Pad::release() {
     Gamepad.release(button_id);
     digitalWrite(LED_BUILTIN, LOW);
-    Serial.print("Release");
     is_pressed = false;
     Gamepad.write();
 }
@@ -115,8 +119,8 @@ const Pad all_pads[] = {up, down, left, right};
 
 const byte LCD_UP = 0;
 const byte LCD_DOWN = 1;
-const byte LCD_LEFT = 126;
-const byte LCD_RIGHT = 127;
+const byte LCD_LEFT = 127;
+const byte LCD_RIGHT = 126;
 
 const uint8_t up_char[] = {
   0b00000,
@@ -142,9 +146,12 @@ const uint8_t down_char[] = {
 // Debug print. Try Serial if avail, otherwise print to LCD
 void dPrint(String msg) {
   static char buffer[17]; // 16 col LCD + null byte
+
+#if DEBUG == 1
   if (Serial) {
     Serial.println(msg);
   }
+#endif
 
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -221,7 +228,6 @@ void printArrows() {
       lcd.setCursor(15, 1);
       arrow = LCD_RIGHT;
     }
-      dPrint(String(all_pads[i].isPressed()));
     if (all_pads[i].isPressed()) {
       lcd.write(arrow);
     } else {
@@ -238,12 +244,15 @@ void setup() {
 
   Serial.begin(9600); // Debugging
   lcd.begin(16, 2); // 16x2 1602 LCD
-  Gamepad.begin();
 
   dPrint("Initializing...");
   // Delay to open serial for debugging
   //delay(10000);
 
+  Gamepad.begin();
+  for (byte i = 0; i < NUM_PADS; i++) {
+    all_pads[i].begin();
+  }
 /*
   dPrint("Self Test...");
   if (!selfTest()) die();
@@ -267,13 +276,12 @@ void setup() {
 void loop() {
   while(true) {
     int button = analogRead(A0);
-    dPrint(String(button, DEC));
     if (button > 960) { // None
       for (byte i = 0; i < NUM_PADS; i++) {
         all_pads[i].release();
       }
     } else if (button < 64) { // Right
-      left.press();
+      right.press();
     } else if (button < 192) { // Up
       up.press();
     } else if (button < 352) { // Down
