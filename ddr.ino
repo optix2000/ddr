@@ -182,12 +182,12 @@ bool selfTest() {
       long reading = pad->lc().get_value();
       String output = "LC ";
       output += pad->name();
-      output += " Reading: ";
+      output += " : ";
       output += reading;
       dPrint(output);
     } else {
-      String output = "Failed LC ";
-      output += pad->name();
+      String output = pad->name();
+      output += " Failed Test";
       dPrint(output);
       return false;
     }
@@ -198,7 +198,7 @@ bool selfTest() {
 // Calibrate all
 void calibrate() {
   for (byte i = 0; i < NUM_PADS; i++) {
-    dPrint(all_pads[i]->name());
+    dPrint("Calibrating " + all_pads[i]->name());
     all_pads[i]->calibrate();
   }
 }
@@ -238,10 +238,10 @@ void printArrows() {
     bool pressed = all_pads[i]->isPressed();
     if (prev_state[i] != all_pads[i]->isPressed()) { // If state changed
       prev_state[i] = pressed;
-      if (all_pads[i]->isPressed()) {
+      if (pressed) {
         lcd.write(arrow);
       } else {
-        lcd.write(32);
+        lcd.write(32); // Blank char
       }
     }
   }
