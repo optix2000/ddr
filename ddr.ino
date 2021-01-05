@@ -4,7 +4,7 @@
 
 // CONFIG
 
-#define DEBUG 0
+#define DEBUG 1
 
 // Gamepad button ID
 const byte BUTTON_UP = 1;
@@ -14,17 +14,17 @@ const byte BUTTON_RIGHT = 4;
 
 // Load cell pins
 // NB: DOUT pins need interrupts
-const byte LC_UP_DOUT = 0;
-const byte LC_UP_SCK = A2;
-const byte LC_DOWN_DOUT = 1;
-const byte LC_DOWN_SCK = A3;
+const byte LC_UP_DOUT = 1;
+const byte LC_UP_SCK = A3;
+const byte LC_DOWN_DOUT = 0;
+const byte LC_DOWN_SCK = A2;
 const byte LC_LEFT_DOUT = 2;
 const byte LC_LEFT_SCK = A4;
 const byte LC_RIGHT_DOUT = 3;
 const byte LC_RIGHT_SCK = A5;
 
 // Loadcell params
-const float LC_THRESHOLD = 1.10; // Multiplier above max seen value
+const float LC_THRESHOLD = 9000;
 
 // LCD            RS,E,d4,d5,d6,d7
 LiquidCrystal lcd(8, 9, 4, 5, 6, 7);
@@ -66,7 +66,7 @@ String Pad::name() {
 
 void Pad::handle() {
   long reading = hx711.get_value();
-  if (reading > step_threshold) {
+  if (reading > LC_THRESHOLD || reading < -LC_THRESHOLD) {
     press();
   } else {
     release();
@@ -81,28 +81,32 @@ HX711 Pad::lc() {
 void Pad::calibrate() {
     hx711.tare(100);
 
-    long max_val = 0;
-    for (byte i = 0; i < 100; i++) {
-      long reading = hx711.get_value();
-      if (reading > max_val) {
-        max_val = reading;
-      }
-    }
-    step_threshold = max_val * LC_THRESHOLD;
+    //long max_val = 0;
+    //for (byte i = 0; i < 100; i++) {
+    //  long reading = hx711.get_value();
+    //  if (reading > max_val) {
+    //    max_val = reading;
+    //  }
+    //}
+    //step_threshold = max_val * LC_THRESHOLD;
 }
 
 void Pad::press() {
+  if (!is_pressed) {
     Gamepad.press(button_id);
     digitalWrite(LED_BUILTIN, HIGH);
     is_pressed = true;
     Gamepad.write();
+  }
 }
 
 void Pad::release() {
+  if (is_pressed) {
     Gamepad.release(button_id);
     digitalWrite(LED_BUILTIN, LOW);
     is_pressed = false;
     Gamepad.write();
+  }
 }
 
 bool Pad::isPressed() {
@@ -115,7 +119,7 @@ Pad left("Left", BUTTON_LEFT, LC_LEFT_DOUT, LC_LEFT_SCK);
 Pad right("Right", BUTTON_RIGHT, LC_RIGHT_DOUT, LC_RIGHT_SCK);
 
 const byte NUM_PADS = 4;
-const Pad all_pads[] = {up, down, left, right};
+const Pad *all_pads[] = {&up, &down, &left, &right};
 
 const byte LCD_UP = 0;
 const byte LCD_DOWN = 1;
@@ -173,17 +177,17 @@ void die() {
 
 bool selfTest() {
   for (byte i = 0; i < NUM_PADS; i++) {
-    Pad pad = all_pads[i];
-    if (pad.lc().wait_ready_timeout(1000, 100)) {
-      long reading = pad.lc().get_value(100);
+    Pad *pad = all_pads[i];
+    if (pad->lc().wait_ready_timeout(1000, 100)) {
+      long reading = pad->lc().get_value();
       String output = "LC ";
-      output += pad.name();
+      output += pad->name();
       output += " Reading: ";
       output += reading;
       dPrint(output);
     } else {
       String output = "Failed LC ";
-      output += pad.name();
+      output += pad->name();
       dPrint(output);
       return false;
     }
@@ -194,7 +198,8 @@ bool selfTest() {
 // Calibrate all
 void calibrate() {
   for (byte i = 0; i < NUM_PADS; i++) {
-    all_pads[i].calibrate();
+    dPrint(all_pads[i]->name());
+    all_pads[i]->calibrate();
   }
 }
 
@@ -213,6 +218,8 @@ void handleRight() {
 }
 
 void printArrows() {
+  bool changed = false;
+  static bool prev_state[NUM_PADS];
   char arrow;
   for (byte i = 0; i < NUM_PADS; i++) {
     if (i == 0) { // Up
@@ -228,12 +235,20 @@ void printArrows() {
       lcd.setCursor(15, 1);
       arrow = LCD_RIGHT;
     }
-    if (all_pads[i].isPressed()) {
-      lcd.write(arrow);
-    } else {
-      lcd.write(32);
+    bool pressed = all_pads[i]->isPressed();
+    if (prev_state[i] != all_pads[i]->isPressed()) { // If state changed
+      prev_state[i] = pressed;
+      if (all_pads[i]->isPressed()) {
+        lcd.write(arrow);
+      } else {
+        lcd.write(32);
+      }
     }
   }
+}
+
+void menu() {
+  return;
 }
 
 void setup() {
@@ -251,9 +266,9 @@ void setup() {
 
   Gamepad.begin();
   for (byte i = 0; i < NUM_PADS; i++) {
-    all_pads[i].begin();
+    all_pads[i]->begin();
   }
-/*
+
   dPrint("Self Test...");
   if (!selfTest()) die();
 
@@ -266,7 +281,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(LC_LEFT_DOUT), handleLeft, LOW);
   attachInterrupt(digitalPinToInterrupt(LC_RIGHT_DOUT), handleRight, LOW);
 
-*/
+
   lcd.createChar(0, up_char);
   lcd.createChar(1, down_char);
 
@@ -277,21 +292,18 @@ void loop() {
   while(true) {
     int button = analogRead(A0);
     if (button > 960) { // None
-      for (byte i = 0; i < NUM_PADS; i++) {
-        all_pads[i].release();
-      }
     } else if (button < 64) { // Right
       right.press();
     } else if (button < 192) { // Up
       up.press();
-    } else if (button < 352) { // Down
+    } else if (button < 384) { // Down
       down.press();
     } else if (button < 512) { // Left
       left.press();
     } else if (button < 832) { // Select
+      menu();
     }
     // LCD menu stuff here.
     printArrows();
-    delay(1000);
   }
 }
